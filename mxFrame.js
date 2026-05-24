@@ -11,13 +11,10 @@ function doneLoading() { }
 {
   // define what parts of the lib to load
   mx.WITH_MXFRAME = 1;
-  mx.WITH_OCULUS = 2;
   mx.WITH_NOISE = 4;
   mx.WITH_TOUCH = 8;
-  mx.WITH_DEBUG = 16;
 
   // source files to load, some optionally
-//  var dependancies = ["libs/glMatrix.js"];
   var baseSrc = [ [ "libs/glMatrix.js"],
                   [ "libs/pako.js",
                     "components/ui/mxLayout.js",
@@ -38,9 +35,7 @@ function doneLoading() { }
                   [ "components/ui/widgets/mxWidget.js" ],
                   ["components/ui/widgets/mxContainer.js"]
                  ];
-  var oculusSrc = ["libs/oculus.lib.js"];
   var touchSrc = ["libs/hammer.lib.js"];
-  var debugSrc = ["libs/WebGLInspector/embed.js"];
   var perlinSrc = ["NoiseLib/mxrandom.js",
                    "NoiseLib/noise.js",
                    "NoiseLib/math.js",
@@ -93,8 +88,7 @@ function doneLoading() { }
 
       if (!loadState.length)
       {
-        if (loadState.libtype & mx.WITH_DEBUG) include(loadState.libdir + "/libs/WebGLInspector/core/embed.js");
-        waitForDebug();
+        main();
       }    
   }
 
@@ -111,18 +105,6 @@ function doneLoading() { }
         else
           include(loadState.libdir + "/" + loadState.src[loadState.loadIndex][i]);
       }  
-    }
-  }
-
-  function waitForDebug()
-  {
-    console.log("debug ready?");
-    if (!HTMLCanvasElement.prototype.getContextOrig || HTMLCanvasElement.prototype.getContext != HTMLCanvasElement.prototype.getContextOrig)
-      main();
-    else
-    {
-      console.log(" debug not ready");
-      setTimeout(waitForDebug, 50);
     }
   }
 
@@ -157,22 +139,12 @@ function doneLoading() { }
   // needs array of user files, library file location, library flags
   mx.loadApp = function (files, lib, type)
   {
-    if (urlParams["debug"]) type |= mx.WITH_DEBUG;
-
-    if (type & mx.WITH_DEBUG) {
-      console.log("with debug");
-      window["gliEmbedDebug"] = true;
-      HTMLCanvasElement.prototype.getContextOrig = HTMLCanvasElement.prototype.getContext;
-    }
-
     if (!type) { alert("Missing app type"); return; }
 
     loadState.libtype = type;
     loadState.libdir = lib;
 
     var src = baseSrc;
-//    if (type & mx.WITH_MXFRAME) src = src.concat(baseSrc);
-    if (type & mx.WITH_OCULUS)  src.push(oculusSrc);
     if (type & mx.WITH_NOISE)   src.push(perlinSrc);
     if (type & mx.WITH_TOUCH)   src.push(touchSrc);
 
@@ -188,7 +160,6 @@ function doneLoading() { }
     for (let i in src) loadState.length += src[i].length;
     loadState.loadIndex = 0;
     loadState.src = src;
-    loadState.loadDebug = (type & mx.WITH_DEBUG) ? 1 : 0;
 
     console.log("Boot up");
     nextGroup();

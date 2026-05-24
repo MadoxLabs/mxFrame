@@ -151,45 +151,12 @@ var gl; // leave this global for quick access
     Game.assetMan.assets['fsqright'] = fsqright;
   }
 
-  var oculusDefault = {};
-  oculusDefault.hResolution = 1280;
-  oculusDefault.vResolution = 800;
-  oculusDefault.hScreenSize = 0.14976;
-  oculusDefault.vScreenSize = 0.0935;
-  oculusDefault.distortionK = [1.0, 0.22, 0.24, 0.0];
-  oculusDefault.vScreenCenter = oculusDefault.VScreenSize / 2.0;
-  oculusDefault.eyeToScreenDistance = 0.041;
-  oculusDefault.lensSeparationDistance = 0.0635;
-  oculusDefault.interpupillaryDistance = 0.065;
-
-  // game renders to texture for possible post processing
-
-  function bridgeConfigUpdated(config)
-  {
-    console.log("Oculus config gotten!");
-    Game.oculus = config;
-    Game.oculusReady |= 2;
-  }
-
-  function bridgeConnected()
-  {
-    console.log("Bridge gotten!");
-    Game.oculusReady |= 1;
-  }
-
-  function bridgeDisconnected()
-  {
-    console.log("Bridge not here!");
-    Game.oculusReady = 0;
-  }
-
   // The one game object
   Game.init = function ()
   {
     // initial set up of the game object, init gl, create helpers
     Game.loading = 0;
     Game.ready = false;
-    Game.isOculus = false;
     Game.isFullscreen = false;
     Game.textureLocation = "";
 
@@ -254,17 +221,6 @@ var gl; // leave this global for quick access
     // handlers
     window.addEventListener('resize', handleSizeChange);
 
-    if (mx.libtype & mx.WITH_OCULUS) {
-      Game.oculus = oculusDefault;
-      Game.oculusReady = 0;
-      Game.oculusBridge = new OculusBridge({
-        onConfigUpdate: bridgeConfigUpdated,
-        onConnect: bridgeConnected,
-        onDisconnect: bridgeDisconnected
-      });
-      Game.loadShaderFile(mx.libdir + "/assets/oculus.fx");
-    }
-
     // let game specific stuff init
     Game.loadShaderFile(mx.libdir + "/assets/sprite.fx");
     Game.loadTextureFile("mouse", mx.libdir + "/assets/mouse.png", false);
@@ -277,32 +233,6 @@ var gl; // leave this global for quick access
     Game.deviceReady();
 
     Game.timer = new GLTimer();
-  }
-
-
-  Game.oculusMode = function (state)
-  {
-    if ((mx.libtype & mx.WITH_OCULUS) == 0) return;
-    if (!Game.oculusBridge) return;
-
-    if (state && !Game.isOculus)
-    {
-      Game.fullscreenMode(true);
-      Game.oculusBridge.connect();
-      Game.postprocess("oculus");
-      Game.camera.splitscreen(true);
-      Game.isOculus = true;
-      adjust = 15;
-    }
-    else if (!state && Game.isOculus)
-    {
-      Game.fullscreenMode(false);
-      Game.oculusBridge.disconnect();
-      Game.postprocess(null);
-      Game.camera.splitscreen(false);
-      Game.isOculus = false;
-      adjust = 0;
-    }
   }
 
   Game.fullscreenMode = function (state)
@@ -469,8 +399,6 @@ var gl; // leave this global for quick access
   {
     if (Game.ready == false) return;
 
-    //  var scope = WTF.trace.enterScope('Game.run');
-
     Game.RAFid = window.requestAnimationFrame(Game.run);
 
     Game.lastTime = Game.time;
@@ -500,8 +428,6 @@ var gl; // leave this global for quick access
       drawTime = 0;
       idleTime = 0;
     }
-
-    //  WTF.trace.leaveScope(scope);
   }
 
   Game.update = function ()
@@ -526,14 +452,6 @@ var gl; // leave this global for quick access
 
     Game.drawEachEye();
 
-    // post process here
-    if (Game.isOculus)
-    {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      Game.drawEachEyeOculusEffect();
-    }
-
     Game.shaderMan.log = false;
   }
 
@@ -542,7 +460,6 @@ var gl; // leave this global for quick access
     for (var eye in Game.camera.eyes) Game.drawEye(Game.camera.eyes[eye]);
   }
 
-  var adjust = 0;
   var drawEyeMouseUniform = { location: vec2.create(), size: vec2.fromValues(32, 32), screensize: vec2.create() };
 
   Game.drawEye = function (eye)
@@ -554,7 +471,7 @@ var gl; // leave this global for quick access
     if (Game.mouse.grabbed) return;
 
     // MOUSE AREA
-    vec2.set(drawEyeMouseUniform.location, Game.mouse.X + eye.ipd * 100 * adjust, Game.mouse.Y);
+    vec2.set(drawEyeMouseUniform.location, Game.mouse.X, Game.mouse.Y);
     //  vec2.set(drawEyeMouseUniform.size, 32, 32);
     vec2.set(drawEyeMouseUniform.screensize, eye.viewport[2], eye.viewport[3]);
 
@@ -565,30 +482,6 @@ var gl; // leave this global for quick access
     effect.draw(Game.assetMan.assets['sprite']);
     // END MOUSE AREA
   }
-
-  Game.drawEachEyeOculusEffect = function ()
-  {
-    for (var eye in Game.camera.eyes) Game.drawEyeOculusEffect(Game.camera.eyes[eye]);
-  }
-
-  var oculusEffectUniform = { distortionscale: 0.8, aspect: 0, ScreenCenter: 0, LensCenter: 0 };
-
-  Game.drawEyeOculusEffect = function (eye)
-  {
-    if (mx.libtype & mx.WITH_OCULUS == 0) return;
-
-    eye.engage();
-    oculusEffectUniform.aspect = Game.oculus.hResolution * 0.5 / Game.oculus.vResolution;
-    oculusEffectUniform.ScreenCenter = eye.center;
-    oculusEffectUniform.LensCenter = eye.lenscenter;
-
-    var effect = Game.shaderMan.shaders[Game.postprocessShader];
-    effect.bind();
-    effect.setUniforms(oculusEffectUniform);
-    effect.bindTexture("uFrontbuffer", Game.frontbuffer.texture);
-    effect.draw(Game.assetMan.assets[eye.fsq]);
-  }
-
 
   Game.fireMouseEvent = function (type, mouse)
   {
@@ -603,12 +496,6 @@ var gl; // leave this global for quick access
     gl.viewportWidth = Game.surface.clientWidth;
     gl.viewportHeight = Game.surface.clientHeight;
 
-    if (mx.libtype & mx.WITH_OCULUS)
-    {
-      Game.oculus.hResolution = Game.surface.clientWidth;
-      Game.oculus.vResolution = Game.surface.clientHeight;
-    }
-
     Game.camera.handleSizeChange(Game.surface.width, Game.surface.height);
     if (Game.frontbuffer) Game.frontbuffer = new mx.RenderSurface(gl.viewportWidth, gl.viewportHeight);
     Game.deviceReady();
@@ -617,9 +504,6 @@ var gl; // leave this global for quick access
   Game.handleKeyDown = function(event)
   {
     if ([80].indexOf(event.keyCode) > -1) { /*Game.shaderMan.log = true;*/ console.log(Game.getFPS()); }
-    //if ([189].indexOf(event.keyCode) > -1) { wtf.trace.reset(); wtf.trace.start(options); }
-    //if ([187].indexOf(event.keyCode) > -1) { wtf.trace.snapshot(); wtf.trace.stop(); }
-
     if (Game.appHandleKeyDown) Game.appHandleKeyDown(event);
   }
 
